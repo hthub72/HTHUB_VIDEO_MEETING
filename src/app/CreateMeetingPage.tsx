@@ -9,7 +9,6 @@ import { useUser } from "@clerk/nextjs";
 import { Call, MemberRequest, useStreamVideoClient } from "@stream-io/video-react-sdk";
 import { Loader2 } from "lucide-react";
 import { getUserIds } from "./actions"; 
-import { Router } from "next/router";
 
 
 const App: React.FC = () => {
@@ -94,6 +93,9 @@ const App: React.FC = () => {
 
       setCall(call);
 
+      alert(
+        `Cita confirmada para ${selectDate.format("dddd, MMMM D, YYYY")} a las ${selectedTime}\nNotas: ${notes}`,
+      );
     } catch (error) {
       console.error(error);
       alert("Ocurrió un error. Por favor, inténtalo de nuevo más tarde.");
@@ -133,7 +135,7 @@ const App: React.FC = () => {
       {!showFinalPanel ? (
         <>
           {/* Panel Central */}
-          <div className="flex-1 p-4 rounded-xl bg-white fade-in">
+          <div className="flex-1 p-4 rounded-xl bg-white">
             <div className="mb-4 flex items-center justify-between">
               <h1 className="font-semibold select-none">
                 {months[today.month()]}, {today.year()}
@@ -191,7 +193,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Panel Derecho */}
-          <div className="flex-1 p-4 rounded-xl bg-gray-100 fade-in">
+          <div className="flex-1 p-4 rounded-xl bg-gray-100">
             <div>
               <h1 className="font-semibold text-center md:text-left">
                 Schedule for {selectDate.toDate().toDateString()}
@@ -211,7 +213,7 @@ const App: React.FC = () => {
           </div>
         </>
       ) : (
-        <div className="flex-1 p-4 rounded-xl bg-white fade-in">
+        <div className="flex-1 p-4 rounded-xl bg-white">
           <h1 className="mb-4 font-semibold">Appointment Details</h1>
           <p className="mb-4">{`${selectDate.format("dddd, MMMM D, YYYY")} ${selectedTime}`}</p>
           <textarea
