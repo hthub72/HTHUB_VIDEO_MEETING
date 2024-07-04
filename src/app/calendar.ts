@@ -22,12 +22,13 @@ export const generateDate = (month: number, year: number): DateObject[] => {
   let currentDate = startDate;
 
   for (let i = 0; i < totalDays; i++) {
-    const dateObj: DateObject = {
+    let dateObj: DateObject; // Declarar dateObj aquí para evitar el error
+    dateObj = {
       date: currentDate,
       currentMonth: currentDate.month() === month,
       today: currentDate.isSame(today, "day"),
       weekend: currentDate.day() === 0 || currentDate.day() === 6,
-      selectable: currentDate.isSame(today, "day") || (currentDate.isAfter(today, "day") && currentDate.isBefore(today.add(2, "week"), "day")), // Bloquear días anteriores a hoy y posteriores a dos semanas
+      selectable: currentDate.isSame(today, "day") || (currentDate.isAfter(today, "day") && currentDate.isBefore(today.add(2, "week"), "day") && !(currentDate.day() === 0 || currentDate.day() === 6)), // Bloquear días anteriores a hoy y posteriores a dos semanas
     };
     dates.push(dateObj);
     currentDate = currentDate.add(1, "day");
@@ -45,11 +46,13 @@ export const generateTimeRangeButtons = (
   const end = dayjs().set("hour", parseInt(endTime.split(":")[0])).set("minute", parseInt(endTime.split(":")[1]));
 
   const buttons: string[] = [];
-  let currentTime = start;
+  let currentTime = dayjs().add(2, 'hour').startOf('minute'); // Inicia 2 horas después de la hora actual
 
   while (currentTime.isBefore(end)) {
-    buttons.push(currentTime.format("h:mm A"));
-    currentTime = currentTime.add(interval, "minute");
+    if (currentTime.isAfter(dayjs())) {
+      buttons.push(currentTime.format("h:mm A"));
+    }
+    currentTime = currentTime.add(interval, "minute"); // Actualiza el currentTime con el intervalo
   }
 
   return buttons;
