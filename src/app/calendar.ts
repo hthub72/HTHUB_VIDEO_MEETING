@@ -38,25 +38,29 @@ export const generateDate = (month: number, year: number): DateObject[] => {
 };
 
 export const generateTimeRangeButtons = (
-  interval: number, // intervalo de tiempo en minutos (15, 30, 60, etc.)
-  startTime: string, // hora de inicio del día en formato "HH:mm"
-  endTime: string // hora de fin del día en formato "HH:mm"
+  interval: number,
+  startTime: string,
+  endTime: string
 ): string[] => {
-  const start = dayjs().set("hour", parseInt(startTime.split(":")[0])).set("minute", parseInt(startTime.split(":")[1]));
-  const end = dayjs().set("hour", parseInt(endTime.split(":")[0])).set("minute", parseInt(endTime.split(":")[1]));
+  const startOfDay = dayjs().set("hour", parseInt(startTime.split(":")[0])).set("minute", parseInt(startTime.split(":")[1]));
+  const endOfDay = dayjs().set("hour", parseInt(endTime.split(":")[0])).set("minute", parseInt(endTime.split(":")[1]));
 
   const buttons: string[] = [];
-  let currentTime = dayjs().add(2, 'hour').startOf('minute'); // Inicia 2 horas después de la hora actual
+  let currentTime = dayjs().startOf('hour').add(2, 'hour'); // Inicia 2 horas después de la hora actual, respetando el inicio del día
 
-  while (currentTime.isBefore(end)) {
-    if (currentTime.isAfter(dayjs())) {
+  while (currentTime.isBefore(endOfDay) || currentTime.isSame(endOfDay, 'minute')) {
+    if (currentTime >= startOfDay) {
       buttons.push(currentTime.format("h:mm A"));
     }
-    currentTime = currentTime.add(interval, "minute"); // Actualiza el currentTime con el intervalo
+    currentTime = currentTime.add(interval, "minute");
   }
 
   return buttons;
 };
+
+
+
+
 
 export const months = [
   "January", "February", "March", "April", "May", "June",

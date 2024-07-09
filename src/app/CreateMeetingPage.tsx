@@ -3,17 +3,12 @@
 import dayjs, { Dayjs } from "dayjs";
 import React, { useState } from "react";
 import { GrFormNext, GrFormPrevious } from "react-icons/gr";
-import Button from "@/components/Button";
 import { useUser } from "@clerk/nextjs";
-import {
-  Call,
-  MemberRequest,
-  useStreamVideoClient,
-} from "@stream-io/video-react-sdk";
+import {Call, MemberRequest, useStreamVideoClient } from "@stream-io/video-react-sdk";
 import { Loader2 } from "lucide-react";
-import { generateDate, months, DateObject } from "./calendar";
-import { generateTimeRangeButtons } from "./timeUtils"; // Nueva importación
-import { getUserIds } from "./userUtils"; // Nueva importación
+import { generateDate, months, DateObject,generateTimeRangeButtons } from "./calendar";
+//import { generateTimeRangeButtons } from "./timeUtils"; // Nueva importación
+import { getUserIds } from "./actions"; // Nueva importación
 
 const App: React.FC = () => {
   const days = ["S", "M", "T", "W", "T", "F", "S"];
@@ -27,6 +22,7 @@ const App: React.FC = () => {
   const [call, setCall] = useState<Call>();
   const client = useStreamVideoClient();
   const { user } = useUser();
+
 
   const dates = generateDate(today.month(), today.year());
 
@@ -47,46 +43,50 @@ const App: React.FC = () => {
   };
 
   async function handleConfirm() {
-    if (!client || !user) {
-      return;
-    }
-
-    try {
-      const id = crypto.randomUUID();
-
-      const callType = "private-meeting";
-      const call = client.call(callType, id);
-
-      const memberEmails = ['apphthub@gmail.com']; // You can add emails if needed
-      const memberIds = await getUserIds(memberEmails);
-
-      const members: MemberRequest[] = memberIds
-        .map((id) => ({ user_id: id, role: "call_member" }))
-        .concat({ user_id: user.id, role: "call_member" })
-        .filter(
-          (v, i, a) => a.findIndex((v2) => v2.user_id === v.user_id) === i,
-        );
-
-      const starts_at = selectDate.toISOString();
-
-      await call.getOrCreate({
-        data: {
-          starts_at,
-          members,
-          custom: { description: notes },
-        },
-      });
-
-      setCall(call);
-
-      alert(
-        `Appointment confirmed for ${selectDate.format("dddd, MMMM D, YYYY")} at ${selectedTime}\nNotes: ${notes}`,
-      );
-    } catch (error) {
-      console.error(error);
-      alert("Something went wrong. Please try again later.");
-    }
+  if (!client || !user) {
+    alert("Client or user not defined");
+    return;
   }
+
+  try {
+    const id = crypto.randomUUID();
+
+    const callType = "default";
+    const call = client.call(callType, id);
+
+    const memberEmails = ['apphthub@gmail.com']; // You can add emails if needed
+    const memberIds = await getUserIds(memberEmails);
+
+    const members: MemberRequest[] = memberIds
+      .map((id) => ({ user_id: id, role: "call_member" }))
+      .concat({ user_id: user.id, role: "call_member" })
+      .filter(
+        (v, i, a) => a.findIndex((v2) => v2.user_id === v.user_id) === i,
+      );
+
+    const starts_at = selectDate.toISOString();
+
+    await call.getOrCreate({
+      data: {
+        starts_at,
+        members,
+        custom: { description: notes },
+      },
+    });
+
+    setCall(call);
+
+    alert(
+      `Appointment confirmed for ${selectDate.format("dddd, MMMM D, YYYY")} at ${selectedTime}\nNotes: ${notes}`,
+    );
+    
+    
+  } catch (error) {
+    console.error(error);
+    alert("Something went wrong. Please try again later."+error);
+  }
+}
+
 
   const interval = 15; // Intervalo en minutos
   const startTime = "6:00"; // Hora de inicio del día

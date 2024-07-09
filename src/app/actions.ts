@@ -33,8 +33,16 @@ export async function getToken() {
 }
 
 export async function getUserIds(emailAddresses: string[]) {
+  const clerkFrontendApi = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const clerkApiKey = process.env.CLERK_SECRET_KEY;
+
+  if (!clerkFrontendApi || !clerkApiKey) {
+    throw new Error("Clerk API key or frontend API not set");
+  }
+
   const response = await clerkClient.users.getUserList({
     emailAddress: emailAddresses,
   });
+
   return response.map((user) => user.id);
 }
