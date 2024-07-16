@@ -1,16 +1,20 @@
 "use client";
 
+import React, { useState, useEffect } from "react";
 import dayjs, { Dayjs } from "dayjs";
-import React, { useState } from "react";
+import { generateDate, generateTimeRangeButtons, filterPastTimes, months, DateObject } from "./calendar";
 import { GrFormNext, GrFormPrevious } from "react-icons/gr";
 import { useUser } from "@clerk/nextjs";
-import {Call, MemberRequest, useStreamVideoClient } from "@stream-io/video-react-sdk";
+import { Call, MemberRequest, useStreamVideoClient } from "@stream-io/video-react-sdk";
 import { Loader2 } from "lucide-react";
-import { generateDate, months, DateObject,generateTimeRangeButtons } from "./calendar";
-//import { generateTimeRangeButtons } from "./timeUtils"; // Nueva importación
-import { getUserIds } from "./actions"; // Nueva importación
 
-const App: React.FC = () => {
+// Simulated function to get user IDs from emails
+const getUserIds = async (emails: string[]): Promise<string[]> => {
+  // Simulated response
+  return emails.map(email => `user-${email}`);
+};
+
+const CreateMeetingPage: React.FC = () => {
   const days = ["S", "M", "T", "W", "T", "F", "S"];
   const currentDate = dayjs();
   const [today, setToday] = useState<Dayjs>(currentDate);
@@ -23,6 +27,8 @@ const App: React.FC = () => {
   const client = useStreamVideoClient();
   const { user } = useUser();
 
+  // Obtener la zona horaria actual del usuario
+  const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const dates = generateDate(today.month(), today.year());
 
@@ -43,56 +49,54 @@ const App: React.FC = () => {
   };
 
   async function handleConfirm() {
-  if (!client || !user) {
-    alert("Client or user not defined");
-    return;
-  }
+    if (!client || !user) {
+      return;
+    }
 
-  try {
-    const id = crypto.randomUUID();
+    try {
+      const id = crypto.randomUUID();
 
-    const callType = "default";
-    const call = client.call(callType, id);
+      const callType = "private-meeting";
+      const call = client.call(callType, id);
 
-    const memberEmails = ['apphthub@gmail.com']; // You can add emails if needed
-    const memberIds = await getUserIds(memberEmails);
+      const memberEmails = ['apphthub@gmail.com']; // Puedes agregar correos si es necesario
+      const memberIds = await getUserIds(memberEmails);
 
-    const members: MemberRequest[] = memberIds
-      .map((id) => ({ user_id: id, role: "call_member" }))
-      .concat({ user_id: user.id, role: "call_member" })
-      .filter(
-        (v, i, a) => a.findIndex((v2) => v2.user_id === v.user_id) === i,
+      const members: MemberRequest[] = memberIds
+        .map((id: string) => ({ user_id: id, role: "call_member" }))
+        .concat({ user_id: user.id, role: "call_member" })
+        .filter(
+          (v: MemberRequest, i: number, a: MemberRequest[]) => a.findIndex((v2: MemberRequest) => v2.user_id === v.user_id) === i,
+        );
+
+      const starts_at = selectDate.toISOString();
+
+      await call.getOrCreate({
+        data: {
+          starts_at,
+          members,
+          custom: { description: notes },
+        },
+      });
+
+      setCall(call);
+
+      alert(
+        `Appointment confirmed for ${selectDate.format("dddd, MMMM D, YYYY")} at ${selectedTime}\nNotes: ${notes}`,
       );
-
-    const starts_at = selectDate.toISOString();
-
-    await call.getOrCreate({
-      data: {
-        starts_at,
-        members,
-        custom: { description: notes },
-      },
-    });
-
-    setCall(call);
-
-    alert(
-      `Appointment confirmed for ${selectDate.format("dddd, MMMM D, YYYY")} at ${selectedTime}\nNotes: ${notes}`,
-    );
-    
-    
-  } catch (error) {
-    console.error(error);
-    alert("Something went wrong. Please try again later."+error);
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong. Please try again later.");
+    }
   }
-}
 
+const interval = 15; // Intervalo en minutos
+const startTime = "07:00"; // Hora de inicio del día
+const endTime = "18:00"; // Hora de fin del día
+const selectedDate = dayjs(); // Esto debería ser la fecha seleccionada por el usuario o la fecha actual según tu lógica
 
-  const interval = 15; // Intervalo en minutos
-  const startTime = "6:00"; // Hora de inicio del día
-  const endTime = "18:00"; // Hora de fin del día
-
-  const timeRangeButtons = generateTimeRangeButtons(interval, startTime, endTime);
+const allTimeRangeButtons = generateTimeRangeButtons(interval, startTime, endTime, selectedDate);
+  const timeRangeButtons = filterPastTimes(allTimeRangeButtons, selectDate);
 
   if (!client || !user) {
     return <Loader2 className="mx-auto animate-spin" />;
@@ -113,7 +117,7 @@ const App: React.FC = () => {
           discussing how you can contribute to our team.
         </p>
         <p className="mb-2 text-xs text-gray-500">15 minutes</p>
-        <p className="mb-2 text-xs text-gray-500">America/Costa Rica</p>
+        <p className="mb-2 text-xs text-gray-500">{userTimeZone}</p>
       </div>
 
       {!showFinalPanel ? (
@@ -170,27 +174,20 @@ const App: React.FC = () => {
                   <div
                     key={index}
                     className={`
-      grid h-10 place-content-center border-t p-1 text-center text-xs md:h-14 md:p-2 md:text-sm
-      ${!currentMonth ? "text-gray-400" : ""}
-      ${weekend ? "pointer-events-none opacity-50" : ""}
-      ${!selectable ? "pointer-events-none opacity-50" : ""} // Aplicar estilo para días no seleccionables
-    `}
+                    grid h-10 place-content-center border-t p-1 text-center text-xs md:h-14 md:p-2 md:text-sm
+                    ${!currentMonth ? "text-gray-400" : ""}
+                    ${weekend ? "pointer-events-none opacity-50" : ""}
+                    ${!selectable ? "opacity-50" : ""} // Aplicar estilo para días no seleccionables
+                  `}
                     onClick={() => handleDateClick(date, selectable)}
-                    onMouseEnter={() => {
-                      if (selectable) {
-                        // Agregar efecto de hover solo si es seleccionable
-                        // Aquí puedes añadir cualquier lógica adicional de hover
-                      }
-                    }}
                   >
                     <h1
                       className={`
-        ${currentMonth ? "" : "text-gray-400"}
-        ${today ? "bg-red-600 text-white" : ""}
-        ${selectDate.toDate().toDateString() === date.toDate().toDateString() ? "bg-black text-white" : ""}
-        grid h-8 w-8 cursor-pointer select-none place-content-center rounded-full transition-all md:h-10 md:w-10
-        ${selectable ? "hover:bg-black hover:text-white" : ""} // Aplicar hover solo si es seleccionable
-      `}
+                      ${currentMonth ? "" : "text-gray-400"}
+                      ${today ? "bg-red-600 text-white" : ""}
+                      ${selectDate.toDate().toDateString() === date.toDate().toDateString() ? "bg-black text-white" : ""}
+                      grid h-8 w-8 cursor-pointer select-none place-content-center rounded-full transition-all hover:bg-black hover:text-white md:h-10 md:w-10
+                    `}
                     >
                       {date.date()}
                     </h1>
@@ -201,24 +198,11 @@ const App: React.FC = () => {
           </div>
 
           {/* Panel Derecho */}
-          <div className="fade-in flex-1 rounded-xl bg-gray-100 p-4">
-            <div>
-              <h1 className="text-center font-semibold md:text-left">
-                Schedule for {selectDate.toDate().toDateString()}
-              </h1>
-              <div className="time-buttons-container mt-4 max-h-64 overflow-y-auto md:max-h-96">
-                {timeRangeButtons.map((time, index) => (
-                  <button
-                    key={index}
-                    className="mb-2 block w-full rounded-md bg-gray-200 px-4 py-2 text-gray-700 hover:bg-gray-300 focus:outline-none"
-                    onClick={() => handleTimeClick(time)}
-                  >
-                    {time}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <RightPanel 
+            selectDate={selectDate} 
+            timeRangeButtons={timeRangeButtons} 
+            handleTimeClick={handleTimeClick} 
+          />
         </>
       ) : (
         <div className="fade-in flex-1 rounded-xl bg-white p-4">
@@ -250,4 +234,33 @@ const App: React.FC = () => {
   );
 };
 
-export default App;
+const RightPanel = ({
+  selectDate,
+  timeRangeButtons,
+  handleTimeClick
+}: {
+  selectDate: Dayjs;
+  timeRangeButtons: string[];
+  handleTimeClick: (time: string) => void;
+}) => (
+  <div className="fade-in flex-1 rounded-xl bg-gray-100 p-4">
+    <div>
+      <h1 className="text-center font-semibold md:text-left">
+        Schedule for {selectDate.toDate().toDateString()}
+      </h1>
+      <div className="time-buttons-container mt-4 max-h-64 overflow-y-auto md:max-h-96">
+        {timeRangeButtons.map((time, index) => (
+          <button
+            key={index}
+            className="mb-2 block w-full rounded-md bg-gray-200 px-4 py-2 text-gray-700 hover:bg-gray-300 focus:outline-none"
+            onClick={() => handleTimeClick(time)}
+          >
+            {time}
+          </button>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+export default CreateMeetingPage;
