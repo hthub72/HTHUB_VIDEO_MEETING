@@ -1,18 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import dayjs, { Dayjs } from "dayjs";
-import { generateDate, generateTimeRangeButtons, filterPastTimes, months, DateObject } from "./calendar";
+import { generateDate, generateTimeRangeButtons, months, DateObject } from "./calendar";
 import { GrFormNext, GrFormPrevious } from "react-icons/gr";
 import { useUser } from "@clerk/nextjs";
 import { Call, MemberRequest, useStreamVideoClient } from "@stream-io/video-react-sdk";
 import { Loader2 } from "lucide-react";
-
-// Simulated function to get user IDs from emails
-const getUserIds = async (emails: string[]): Promise<string[]> => {
-  // Simulated response
-  return emails.map(email => `user-${email}`);
-};
 
 const CreateMeetingPage: React.FC = () => {
   const days = ["S", "M", "T", "W", "T", "F", "S"];
@@ -22,81 +16,89 @@ const CreateMeetingPage: React.FC = () => {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [showFinalPanel, setShowFinalPanel] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>("");
+  const [interviewType, setInterviewType] = useState<string>("");
 
   const [call, setCall] = useState<Call>();
   const client = useStreamVideoClient();
   const { user } = useUser();
 
-  // Obtener la zona horaria actual del usuario
+  // Get the current user's timezone
   const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  const dates = generateDate(today.month(), today.year());
+  const dates = useMemo(
+    () => generateDate(today.month(), today.year()),
+    [today],
+  );
 
-  const handleDateClick = (date: Dayjs, selectable: boolean) => {
+  const handleDateClick = useCallback((date: Dayjs, selectable: boolean) => {
     if (selectable) {
       setSelectDate(date);
     }
-  };
+  }, []);
 
-  const handleTimeClick = (time: string) => {
+  const handleTimeClick = useCallback((time: string) => {
     setSelectedTime(time);
     setShowFinalPanel(true);
-  };
+  }, []);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     setShowFinalPanel(false);
     setSelectedTime(null);
-  };
+  }, []);
 
-  async function handleConfirm() {
-    if (!client || !user) {
+  const handleConfirm = useCallback(async () => {
+    if (!client || !user || !selectedTime || !interviewType) {
       return;
     }
 
     try {
       const id = crypto.randomUUID();
-
       const callType = "private-meeting";
       const call = client.call(callType, id);
 
-      const memberEmails = ['apphthub@gmail.com']; // Puedes agregar correos si es necesario
-      const memberIds = await getUserIds(memberEmails);
+      const starts_at = selectDate
+        .hour(parseInt(selectedTime.split(":")[0]))
+        .minute(parseInt(selectedTime.split(":")[1]))
+        .toDate();
+      const ends_at = dayjs(starts_at).add(15, "minute").toDate();
 
-      const members: MemberRequest[] = memberIds
-        .map((id: string) => ({ user_id: id, role: "call_member" }))
-        .concat({ user_id: user.id, role: "call_member" })
-        .filter(
-          (v: MemberRequest, i: number, a: MemberRequest[]) => a.findIndex((v2: MemberRequest) => v2.user_id === v.user_id) === i,
-        );
-
-      const starts_at = selectDate.toISOString();
+      const members: MemberRequest[] = [
+        { user_id: user.id, role: "call_member" },
+      ];
 
       await call.getOrCreate({
         data: {
-          starts_at,
+          starts_at: starts_at.toISOString(),
           members,
-          custom: { description: notes },
+          custom: { description: notes, interviewType },
         },
       });
 
       setCall(call);
 
-      alert(
-        `Appointment confirmed for ${selectDate.format("dddd, MMMM D, YYYY")} at ${selectedTime}\nNotes: ${notes}`,
-      );
+      alert("Appointment confirmed successfully!");
     } catch (error) {
       console.error(error);
       alert("Something went wrong. Please try again later.");
     }
-  }
+  }, [client, user, selectDate, selectedTime, notes, interviewType]);
 
-const interval = 15; // Intervalo en minutos
-const startTime = "07:00"; // Hora de inicio del día
-const endTime = "18:00"; // Hora de fin del día
-const selectedDate = dayjs(); // Esto debería ser la fecha seleccionada por el usuario o la fecha actual según tu lógica
+  const interval = 15; // Interval in minutes
+  const startTime = "09:00"; // Start time of the day
+  const endTime = "17:00"; // End time of the day
+  const includeAMPM = true; // Configuration to include AM/PM
 
-const allTimeRangeButtons = generateTimeRangeButtons(interval, startTime, endTime, selectedDate);
-  const timeRangeButtons = filterPastTimes(allTimeRangeButtons, selectDate);
+  const timeRangeButtons = useMemo(
+    () =>
+      generateTimeRangeButtons(
+        interval,
+        startTime,
+        endTime,
+        includeAMPM,
+        selectDate,
+      ),
+    [interval, startTime, endTime, includeAMPM, selectDate],
+  );
 
   if (!client || !user) {
     return <Loader2 className="mx-auto animate-spin" />;
@@ -104,7 +106,7 @@ const allTimeRangeButtons = generateTimeRangeButtons(interval, startTime, endTim
 
   return (
     <div className="flex flex-col justify-center gap-2 rounded-xl bg-gray-200 p-4 md:flex-row">
-      {/* Panel Izquierdo */}
+      {/* Left Panel */}
       <div className="mb-4 flex-1 rounded-xl bg-gray-100 p-4 md:mb-0">
         <h5 className="mb-2 text-sm text-gray-500">HTHUB</h5>
         <h1 className="mb-4 text-lg font-semibold">
@@ -122,7 +124,7 @@ const allTimeRangeButtons = generateTimeRangeButtons(interval, startTime, endTim
 
       {!showFinalPanel ? (
         <>
-          {/* Panel Central */}
+          {/* Central Panel */}
           <div className="fade-in mb-4 flex-1 rounded-xl bg-white p-4 md:mb-0">
             <div className="mb-4 flex items-center justify-between">
               <h1 className="select-none font-semibold">
@@ -176,8 +178,7 @@ const allTimeRangeButtons = generateTimeRangeButtons(interval, startTime, endTim
                     className={`
                     grid h-10 place-content-center border-t p-1 text-center text-xs md:h-14 md:p-2 md:text-sm
                     ${!currentMonth ? "text-gray-400" : ""}
-                    ${weekend ? "pointer-events-none opacity-50" : ""}
-                    ${!selectable ? "opacity-50" : ""} // Aplicar estilo para días no seleccionables
+                    ${!selectable ? "pointer-events-none opacity-50" : ""}
                   `}
                     onClick={() => handleDateClick(date, selectable)}
                   >
@@ -197,11 +198,11 @@ const allTimeRangeButtons = generateTimeRangeButtons(interval, startTime, endTim
             </div>
           </div>
 
-          {/* Panel Derecho */}
-          <RightPanel 
-            selectDate={selectDate} 
-            timeRangeButtons={timeRangeButtons} 
-            handleTimeClick={handleTimeClick} 
+          {/* Right Panel */}
+          <RightPanel
+            selectDate={selectDate}
+            timeRangeButtons={timeRangeButtons}
+            handleTimeClick={handleTimeClick}
           />
         </>
       ) : (
@@ -214,6 +215,16 @@ const allTimeRangeButtons = generateTimeRangeButtons(interval, startTime, endTim
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
+          <select
+            className="mb-4 w-full rounded border p-2"
+            value={interviewType}
+            onChange={(e) => setInterviewType(e.target.value)}
+          >
+            <option value="">Select Interview Type</option>
+            <option value="E1 - Senior Data Engineer">
+              E1 - Senior Data Engineer
+            </option>
+          </select>
           <div className="flex gap-4">
             <button
               className="rounded bg-gray-300 px-4 py-2"
@@ -222,8 +233,9 @@ const allTimeRangeButtons = generateTimeRangeButtons(interval, startTime, endTim
               Back
             </button>
             <button
-              className="rounded bg-blue-500 px-4 py-2 text-white"
+              className={`rounded px-4 py-2 text-white ${interviewType ? "bg-blue-500" : "cursor-not-allowed bg-gray-400"}`}
               onClick={handleConfirm}
+              disabled={!interviewType}
             >
               Confirm
             </button>
@@ -234,33 +246,37 @@ const allTimeRangeButtons = generateTimeRangeButtons(interval, startTime, endTim
   );
 };
 
-const RightPanel = ({
-  selectDate,
-  timeRangeButtons,
-  handleTimeClick
-}: {
+const RightPanel: React.FC<{
   selectDate: Dayjs;
   timeRangeButtons: string[];
   handleTimeClick: (time: string) => void;
-}) => (
-  <div className="fade-in flex-1 rounded-xl bg-gray-100 p-4">
-    <div>
-      <h1 className="text-center font-semibold md:text-left">
-        Schedule for {selectDate.toDate().toDateString()}
-      </h1>
-      <div className="time-buttons-container mt-4 max-h-64 overflow-y-auto md:max-h-96">
-        {timeRangeButtons.map((time, index) => (
-          <button
-            key={index}
-            className="mb-2 block w-full rounded-md bg-gray-200 px-4 py-2 text-gray-700 hover:bg-gray-300 focus:outline-none"
-            onClick={() => handleTimeClick(time)}
-          >
-            {time}
-          </button>
-        ))}
+}> = React.memo(({ selectDate, timeRangeButtons, handleTimeClick }) => {
+  return (
+    <div className="fade-in flex-1 rounded-xl bg-gray-100 p-4">
+      <div>
+        <h1 className="text-center font-semibold md:text-left">
+          Schedule for {selectDate.format("MMMM D, YYYY")}
+        </h1>
+        <div className="time-buttons-container mt-4 max-h-64 overflow-y-auto md:max-h-96">
+          {timeRangeButtons.length > 0 ? (
+            timeRangeButtons.map((time, index) => (
+              <button
+                key={index}
+                className="mb-2 block w-full rounded-md bg-gray-200 px-4 py-2 text-gray-700 hover:bg-gray-300 focus:outline-none"
+                onClick={() => handleTimeClick(time)}
+              >
+                {time}
+              </button>
+            ))
+          ) : (
+            <p>No available time slots for this date.</p>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+});
+
+RightPanel.displayName = 'RightPanel';
 
 export default CreateMeetingPage;

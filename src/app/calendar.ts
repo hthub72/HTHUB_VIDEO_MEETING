@@ -1,5 +1,3 @@
-// calendar.ts
-
 import dayjs, { Dayjs } from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -19,11 +17,15 @@ export const generateDate = (month: number, year: number): DateObject[] => {
   const dates: DateObject[] = [];
   const startOfMonth = dayjs().year(year).month(month).startOf("month");
   const endOfMonth = dayjs().year(year).month(month).endOf("month");
+  const today = dayjs();
+  const twoWeeksFromNow = today.add(15, 'day');
 
   for (let date = startOfMonth; date.isBefore(endOfMonth) || date.isSame(endOfMonth, 'day'); date = date.add(1, 'day')) {
-    const isToday = date.isSame(dayjs(), 'day');
+    const isToday = date.isSame(today, 'day');
     const isWeekend = date.day() === 0 || date.day() === 6;
-    const isSelectable = date.isAfter(dayjs().subtract(1, 'day')) && date.isBefore(dayjs().add(2, 'week'));
+    const isSelectable = (date.isAfter(today) || date.isSame(today, 'day')) && 
+                         date.isBefore(twoWeeksFromNow) && 
+                         !isWeekend;
 
     dates.push({
       date,
@@ -37,47 +39,33 @@ export const generateDate = (month: number, year: number): DateObject[] => {
   return dates;
 };
 
-export const generateTimeRangeButtons = (interval: number, startTime: string, endTime: string, selectDate: Dayjs): string[] => {
+export const generateTimeRangeButtons = (
+  interval: number, 
+  startTime: string, 
+  endTime: string, 
+  includeAMPM: boolean,
+  date: Dayjs
+): string[] => {
   const times: string[] = [];
-  const startOfDay = dayjs().startOf('day');
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const now = dayjs().tz(timezone);
-  const start = dayjs().startOf('day').add(7, 'hour');
-  const end = dayjs().startOf('day').add(19, 'hour');
+  const start = date.isSame(now, 'day') ? now : date.hour(parseInt(startTime.split(':')[0])).minute(parseInt(startTime.split(':')[1]));
+  const end = date.hour(parseInt(endTime.split(':')[0])).minute(parseInt(endTime.split(':')[1]));
 
-  let currentTime = selectDate.isSame(now, 'day') ? dayjs().startOf('hour').add(now.hour(), 'hour').add(now.minute(), 'minute') : start;
+  let currentTime = roundToNearest(start, interval);
 
-  // Función para redondear al intervalo más cercano
-  const roundToNearest = (time: Dayjs, minutes: number) => {
-    const remainder = minutes - (time.minute() % minutes);
-    return time.add(remainder, 'minute');
-  };
-
-  while (currentTime.isBefore(end) || currentTime.isSame(end, 'minute')) {
-    const roundedTime = roundToNearest(currentTime, interval);
-    if (roundedTime.isAfter(startOfDay.add(7, 'hour')) && roundedTime.isBefore(startOfDay.add(19, 'hour'))) {
-      times.push(roundedTime.format("HH:mm"));
-    }
+  while (currentTime.isBefore(end) || currentTime.isSame(end, "minute")) {
+    let formattedTime = includeAMPM ? currentTime.format("h:mm A") : currentTime.format("HH:mm");
+    times.push(formattedTime);
     currentTime = currentTime.add(interval, "minute");
   }
 
   return times;
 };
 
-export const filterPastTimes = (times: string[], selectDate: Dayjs): string[] => {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const now = dayjs().tz(timezone);
-  const selectedDayStart = selectDate.startOf("day");
-
-  if (now.isBefore(selectedDayStart)) {
-    return times;
-  }
-
-  return times.filter(time => {
-    const [hours, minutes] = time.split(":").map(Number);
-    const dateTime = selectDate.hour(hours).minute(minutes);
-    return dateTime.isAfter(now);
-  });
+export const roundToNearest = (time: Dayjs, minutes: number) => {
+  const remainder = minutes - (time.minute() % minutes);
+  return time.add(remainder, "minute");
 };
 
 export const months = [
