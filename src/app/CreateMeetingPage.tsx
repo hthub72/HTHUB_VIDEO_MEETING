@@ -79,7 +79,7 @@ const handleConfirm = useCallback(async () => {
     setCall(call);
 
     // Generate meeting URL
-    const meetingUrl = `http://localhost:3000/meeting/`; // Replace with your actual meeting URL format
+    const meetingUrl = process.env.NEXT_PUBLIC_BASE_URL+`/meeting/`; // Replace with your actual meeting URL format
 
     // Send webhook for ICS file creation
     const webhookHandler = new WebhookICSHandler(WEBHOOK_URL);
