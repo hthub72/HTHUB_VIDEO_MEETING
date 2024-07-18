@@ -80,7 +80,7 @@ END:VCALENDAR`;
     
 Please consider the next details:
 
-- Meeting Link: ${data.meetingUrl}${data.uid}
+- Meeting Link: ${data.meetingUrl}
 - Meeting Start Time: ${startTime.format('MMMM D, YYYY, at HH:mm')} UTC
 - Meeting Duration: 15 minutes
 
