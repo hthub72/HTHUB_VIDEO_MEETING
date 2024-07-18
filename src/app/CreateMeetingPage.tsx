@@ -7,6 +7,7 @@ import { GrFormNext, GrFormPrevious } from "react-icons/gr";
 import { useUser } from "@clerk/nextjs";
 import { Call, MemberRequest, useStreamVideoClient } from "@stream-io/video-react-sdk";
 import { Loader2 } from "lucide-react";
+import WebhookICSHandler from '../app/api/WebhookICSHandler';
 
 const CreateMeetingPage: React.FC = () => {
   const days = ["S", "M", "T", "W", "T", "F", "S"];
@@ -17,6 +18,7 @@ const CreateMeetingPage: React.FC = () => {
   const [showFinalPanel, setShowFinalPanel] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>("");
   const [interviewType, setInterviewType] = useState<string>("");
+  const WEBHOOK_URL = 'https://hook.us1.make.com/kuv3qlh73j567ewhj5vacs1rk9dfzil7';
 
   const [call, setCall] = useState<Call>();
   const client = useStreamVideoClient();
@@ -46,42 +48,58 @@ const CreateMeetingPage: React.FC = () => {
     setSelectedTime(null);
   }, []);
 
-  const handleConfirm = useCallback(async () => {
-    if (!client || !user || !selectedTime || !interviewType) {
-      return;
-    }
+const handleConfirm = useCallback(async () => {
+  if (!client || !user || !selectedTime || !interviewType) {
+    return;
+  }
 
-    try {
-      const id = crypto.randomUUID();
-      const callType = "private-meeting";
-      const call = client.call(callType, id);
+  try {
+    const id = crypto.randomUUID();
+    const callType = "private-meeting";
+    const call = client.call(callType, id);
 
-      const starts_at = selectDate
-        .hour(parseInt(selectedTime.split(":")[0]))
-        .minute(parseInt(selectedTime.split(":")[1]))
-        .toDate();
-      const ends_at = dayjs(starts_at).add(15, "minute").toDate();
+    const starts_at = selectDate
+      .hour(parseInt(selectedTime.split(":")[0]))
+      .minute(parseInt(selectedTime.split(":")[1]))
+      .toDate();
+    const ends_at = dayjs(starts_at).add(15, "minute").toDate();
 
-      const members: MemberRequest[] = [
-        { user_id: user.id, role: "call_member" },
-      ];
+    const members: MemberRequest[] = [
+      { user_id: user.id, role: "call_member" },
+    ];
 
-      await call.getOrCreate({
-        data: {
-          starts_at: starts_at.toISOString(),
-          members,
-          custom: { description: notes, interviewType },
-        },
-      });
+    await call.getOrCreate({
+      data: {
+        starts_at: starts_at.toISOString(),
+        members,
+        custom: { description: notes, interviewType },
+      },
+    });
 
-      setCall(call);
+    setCall(call);
 
-      alert("Appointment confirmed successfully!");
-    } catch (error) {
-      console.error(error);
-      alert("Something went wrong. Please try again later.");
-    }
-  }, [client, user, selectDate, selectedTime, notes, interviewType]);
+    // Generate meeting URL
+    const meetingUrl = `http://localhost:3000/meeting/`; // Replace with your actual meeting URL format
+
+    // Send webhook for ICS file creation
+    const webhookHandler = new WebhookICSHandler(WEBHOOK_URL);
+    const icsData = WebhookICSHandler.generateICSData(
+      starts_at,
+      ends_at,
+      interviewType,
+      notes,
+      user,
+      id,
+      meetingUrl
+    );
+    await webhookHandler.sendWebhook(icsData);
+
+    alert("Appointment confirmed successfully!");
+  } catch (error) {
+    console.error(error);
+    alert("Something went wrong. Please try again later.");
+  }
+}, [client, user, selectDate, selectedTime, notes, interviewType]);
 
   const interval = 15; // Interval in minutes
   const startTime = "09:00"; // Start time of the day
