@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import dayjs, { Dayjs } from "dayjs";
 import { generateDate, generateTimeRangeButtons, months, DateObject } from "./calendar";
 import { GrFormNext, GrFormPrevious } from "react-icons/gr";
@@ -8,6 +8,7 @@ import { useUser } from "@clerk/nextjs";
 import { Call, MemberRequest, useStreamVideoClient } from "@stream-io/video-react-sdk";
 import { Loader2 } from "lucide-react";
 import WebhookICSHandler from '../app/api/WebhookICSHandler';
+import AirtableService from '../app/db/AirtableService';
 
 const CreateMeetingPage: React.FC = () => {
   const days = ["S", "M", "T", "W", "T", "F", "S"];
@@ -18,19 +19,39 @@ const CreateMeetingPage: React.FC = () => {
   const [showFinalPanel, setShowFinalPanel] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>("");
   const [interviewType, setInterviewType] = useState<string>("");
+  const [subCodeCampaigns, setSubCodeCampaigns] = useState<string[]>([]);
   const WEBHOOK_URL = 'https://hook.us1.make.com/kuv3qlh73j567ewhj5vacs1rk9dfzil7';
 
   const [call, setCall] = useState<Call>();
+  const [error, setError] = useState<string | null>(null);
   const client = useStreamVideoClient();
   const { user } = useUser();
 
   // Get the current user's timezone
   const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  // Initialize AirtableService
+  const airtableService = useMemo(() => new AirtableService(
+    process.env.NEXT_PUBLIC_AIRTABLE_API_KEY || '',
+    process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID || ''
+  ), []);
+
   const dates = useMemo(
     () => generateDate(today.month(), today.year()),
     [today],
   );
+
+  // Fetch sub code campaigns on component mount
+  useEffect(() => {
+    const fetchSubCodeCampaigns = async () => {
+      if (user && user.emailAddresses && user.emailAddresses[0]) {
+        const userEmail = user.emailAddresses[0].emailAddress;
+        const campaigns = await airtableService.getSubCodeCampaigns(userEmail);
+        setSubCodeCampaigns(['', ...campaigns]); // Add empty value as default
+      }
+    };
+    fetchSubCodeCampaigns();
+  }, [airtableService, user]);
 
   const handleDateClick = useCallback((date: Dayjs, selectable: boolean) => {
     if (selectable) {
@@ -48,58 +69,61 @@ const CreateMeetingPage: React.FC = () => {
     setSelectedTime(null);
   }, []);
 
-const handleConfirm = useCallback(async () => {
-  if (!client || !user || !selectedTime || !interviewType) {
-    return;
-  }
+  const handleConfirm = useCallback(async () => {
+    if (!client || !user || !selectedTime || !interviewType) {
+      return;
+    }
 
-  try {
-    const id = crypto.randomUUID();
-    const callType = "private-meeting";
-    const call = client.call(callType, id);
+    try {
+      const id = crypto.randomUUID();
+      const callType = "private-meeting";
+      const call = client.call(callType, id);
 
-    const starts_at = selectDate
-      .hour(parseInt(selectedTime.split(":")[0]))
-      .minute(parseInt(selectedTime.split(":")[1]))
-      .toDate();
-    const ends_at = dayjs(starts_at).add(15, "minute").toDate();
+      const starts_at = selectDate
+        .hour(parseInt(selectedTime.split(":")[0]))
+        .minute(parseInt(selectedTime.split(":")[1]))
+        .toDate();
+      const ends_at = dayjs(starts_at).add(15, "minute").toDate();
 
-    const members: MemberRequest[] = [
-      { user_id: user.id, role: "call_member" },
-    ];
+      const members: MemberRequest[] = [
+        { user_id: user.id, role: "call_member" },
+      ];
 
-    await call.getOrCreate({
-      data: {
-        starts_at: starts_at.toISOString(),
-        members,
-        custom: { description: notes, interviewType },
-      },
-    });
+      await call.getOrCreate({
+        data: {
+          starts_at: starts_at.toISOString(),
+          members,
+          custom: { 
+            description: notes, 
+            interviewType,
+          },
+        },
+      });
 
-    setCall(call);
+      setCall(call);
 
-    // Generate meeting URL
-    const meetingUrl = process.env.NEXT_PUBLIC_BASE_URL+`/meeting/`; // Replace with your actual meeting URL format
+      // Generate meeting URL
+      const meetingUrl = process.env.NEXT_PUBLIC_BASE_URL+`/meeting/${id}`;
 
-    // Send webhook for ICS file creation
-    const webhookHandler = new WebhookICSHandler(WEBHOOK_URL);
-    const icsData = WebhookICSHandler.generateICSData(
-      starts_at,
-      ends_at,
-      interviewType,
-      notes,
-      user,
-      id,
-      meetingUrl
-    );
-    await webhookHandler.sendWebhook(icsData);
+      // Send webhook for ICS file creation
+      const webhookHandler = new WebhookICSHandler(WEBHOOK_URL);
+      const icsData = WebhookICSHandler.generateICSData(
+        starts_at,
+        ends_at,
+        interviewType,
+        notes,
+        user,
+        id,
+        meetingUrl
+      );
+      await webhookHandler.sendWebhook(icsData);
 
-    alert("Appointment confirmed successfully!");
-  } catch (error) {
-    console.error(error);
-    alert("Something went wrong. Please try again later.");
-  }
-}, [client, user, selectDate, selectedTime, notes, interviewType]);
+      alert("Appointment confirmed successfully!");
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong. Please try again later.");
+    }
+  }, [client, user, selectDate, selectedTime, notes, interviewType]);
 
   const interval = 15; // Interval in minutes
   const startTime = "09:00"; // Start time of the day
@@ -221,6 +245,8 @@ const handleConfirm = useCallback(async () => {
             selectDate={selectDate}
             timeRangeButtons={timeRangeButtons}
             handleTimeClick={handleTimeClick}
+            subCodeCampaigns={subCodeCampaigns}
+            setInterviewType={setInterviewType}
           />
         </>
       ) : (
@@ -233,16 +259,18 @@ const handleConfirm = useCallback(async () => {
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
-          <select
-            className="mb-4 w-full rounded border p-2"
-            value={interviewType}
-            onChange={(e) => setInterviewType(e.target.value)}
-          >
-            <option value="">Select Interview Type</option>
-            <option value="E1 - Senior Data Engineer">
-              E1 - Senior Data Engineer
+          <p className="mb-2">Job application code</p>
+        <select
+          className="mb-4 w-full rounded border p-2"
+          value={interviewType}
+          onChange={(e) => setInterviewType(e.target.value)}
+        >
+          {subCodeCampaigns.map((campaign, index) => (
+            <option key={index} value={campaign}>
+              {campaign}
             </option>
-          </select>
+          ))}
+        </select>
           <div className="flex gap-4">
             <button
               className="rounded bg-gray-300 px-4 py-2"
@@ -268,7 +296,15 @@ const RightPanel: React.FC<{
   selectDate: Dayjs;
   timeRangeButtons: string[];
   handleTimeClick: (time: string) => void;
-}> = React.memo(({ selectDate, timeRangeButtons, handleTimeClick }) => {
+  subCodeCampaigns: string[];
+  setInterviewType: React.Dispatch<React.SetStateAction<string>>;
+}> = React.memo(({ 
+  selectDate, 
+  timeRangeButtons, 
+  handleTimeClick, 
+  subCodeCampaigns, 
+  setInterviewType
+}) => {
   return (
     <div className="fade-in flex-1 rounded-xl bg-gray-100 p-4">
       <div>
